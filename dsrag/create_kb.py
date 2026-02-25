@@ -3,11 +3,12 @@ from dsrag.knowledge_base import KnowledgeBase
 import os
 import time
 
-def create_kb_from_directory(kb_id: str, directory: str, title: str = None, description: str = "", language: str = 'en'):
+def create_kb_from_directory(kb_id: str, directory: str, title: str = None, description: str = "", language: str = 'en', profile: str = "general_balanced"):
     """
     - kb_id is the name of the knowledge base
     - directory is the absolute path to the directory containing the documents
     - no support for manually defined chunk headers here, because they would have to be defined for each file in the directory
+    - profile selects default ingestion/query behavior (e.g. general_balanced, finance_default, legal_default)
 
     Supported file types: .docx, .md, .txt, .pdf
     """
@@ -15,7 +16,7 @@ def create_kb_from_directory(kb_id: str, directory: str, title: str = None, desc
         title = kb_id
     
     # create a new KB
-    kb = KnowledgeBase(kb_id, title=title, description=description, language=language, exists_ok=False)
+    kb = KnowledgeBase(kb_id, title=title, description=description, language=language, exists_ok=False, profile=profile)
 
     # add documents
     for root, dirs, files in os.walk(directory):
@@ -44,10 +45,11 @@ def create_kb_from_directory(kb_id: str, directory: str, title: str = None, desc
     
     return kb
 
-def create_kb_from_file(kb_id: str, file_path: str, title: str = None, description: str = "", language: str = 'en'):
+def create_kb_from_file(kb_id: str, file_path: str, title: str = None, description: str = "", language: str = 'en', profile: str = "general_balanced"):
     """
     - kb_id is the name of the knowledge base
     - file_path is the absolute path to the file containing the documents
+    - profile selects default ingestion/query behavior (e.g. general_balanced, finance_default, legal_default)
 
     Supported file types: .docx, .md, .txt, .pdf
     """
@@ -55,7 +57,7 @@ def create_kb_from_file(kb_id: str, file_path: str, title: str = None, descripti
         title = kb_id
     
     # create a new KB
-    kb = KnowledgeBase(kb_id, title=title, description=description, language=language, exists_ok=False)
+    kb = KnowledgeBase(kb_id, title=title, description=description, language=language, exists_ok=False, profile=profile)
     
     print (f'Creating KB with id {kb_id}...')
 

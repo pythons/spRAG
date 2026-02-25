@@ -38,7 +38,9 @@ nav:
     - Overview: concepts/overview.md
     - Knowledge Bases: concepts/knowledge-bases.md
     - Components: concepts/components.md
+    - Profiles: concepts/profiles.md
     - Configuration: concepts/config.md
+    - Diagnostics: concepts/diagnostics.md
     - Chat: concepts/chat.md
     - Citations: concepts/citations.md
     - VLM File Parsing: concepts/vlm.md

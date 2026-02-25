@@ -4,6 +4,21 @@ dsRAG uses several configuration dictionaries to organize its many parameters. T
 
 ## Document Addition Configs
 
+## Profiles
+
+You can set a profile when creating a KnowledgeBase:
+
+```python
+kb = KnowledgeBase(kb_id="my_kb", profile="finance_default")
+```
+
+Supported profiles:
+- `general_balanced` (default)
+- `finance_default`
+- `legal_default`
+
+Profile defaults are applied first, then any configs you pass to `add_document` or `query` override those defaults.
+
 The following configuration dictionaries can be passed to the `add_document` method:
 
 ### AutoContext Config

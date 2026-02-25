@@ -31,6 +31,11 @@ from dsrag.dsparse.file_parsing.file_system import FileSystem, LocalFileSystem
 from dsrag.metadata import MetadataStorage, LocalMetadataStorage
 from dsrag.chat.citations import convert_elements_to_page_content
 from dsrag.dsparse.file_parsing.vlm_clients import VLM
+from dsrag.config.profiles import (
+    DEFAULT_PROFILE,
+    get_profile_preset,
+    merge_with_profile_defaults,
+)
 
 
 SENSITIVE_CONFIG_KEYS = {
@@ -82,6 +87,7 @@ class KnowledgeBase:
         save_metadata_to_disk: bool = True,
         metadata_storage: Optional[MetadataStorage] = None,
         vlm_client: Optional[VLM] = None,
+        profile: str = DEFAULT_PROFILE,
     ):
         """Initialize a KnowledgeBase instance.
 
@@ -117,6 +123,7 @@ class KnowledgeBase:
         self.kb_id = kb_id
         self.storage_directory = os.path.expanduser(storage_directory)
         self.metadata_storage = metadata_storage if metadata_storage else LocalMetadataStorage(self.storage_directory)
+        self.profile = profile
 
         if save_metadata_to_disk:
             # load the KB if it exists; otherwise, initialize it and save it to disk
@@ -136,6 +143,7 @@ class KnowledgeBase:
                     "description": description,
                     "language": language,
                     "supp_id": supp_id,
+                    "profile": profile,
                     "created_on": created_time,
                 }
                 self._initialize_components(
@@ -148,6 +156,7 @@ class KnowledgeBase:
                 "description": description,
                 "language": language,
                 "supp_id": supp_id,
+                "profile": profile,
             }
             self._initialize_components(
                 embedding_model, reranker, auto_context_model, vector_db, chunk_db, file_system, vlm_client
@@ -236,6 +245,8 @@ class KnowledgeBase:
         self.kb_metadata = {
             key: value for key, value in data.items() if key != "components"
         }
+        self.profile = self.kb_metadata.get("profile", DEFAULT_PROFILE)
+        self.kb_metadata["profile"] = self.profile
         components = data.get("components", {})
         # Deserialize components
         self.embedding_model = Embedding.from_dict(
@@ -453,6 +464,20 @@ class KnowledgeBase:
         semantic_sectioning_config = semantic_sectioning_config or {}
         chunking_config = chunking_config or {}
         metadata = metadata or {}
+
+        profile_defaults = get_profile_preset(self.profile)
+        auto_context_config = merge_with_profile_defaults(
+            profile_defaults.get("auto_context_config", {}),
+            auto_context_config,
+        )
+        semantic_sectioning_config = merge_with_profile_defaults(
+            profile_defaults.get("semantic_sectioning_config", {}),
+            semantic_sectioning_config,
+        )
+        chunking_config = merge_with_profile_defaults(
+            profile_defaults.get("chunking_config", {}),
+            chunking_config,
+        )
         
         # Create a dictionary with base log context fields
         base_extra = {"kb_id": self.kb_id, "doc_id": doc_id}
@@ -900,17 +925,18 @@ class KnowledgeBase:
     def query(
         self,
         search_queries: list[str],
-        rse_params: Union[Dict, str] = "balanced",
+        rse_params: Optional[Union[Dict, str]] = None,
         latency_profiling: bool = False,
         metadata_filter: Optional[MetadataFilter] = None,
         return_mode: str = "text",
-        vector_search_top_k: int = 200,
+        vector_search_top_k: Optional[int] = None,
     ) -> list[dict]:
         """Query the knowledge base to retrieve relevant segments.
 
         Args:
             search_queries (list[str]): List of search queries to execute.
-            rse_params (Union[Dict, str], optional): RSE parameters or preset name. Example:
+            rse_params (Union[Dict, str], optional): RSE parameters or preset name. If omitted,
+                profile default is used. Example:
                 ```python
                 {
                     # Maximum segment length in chunks
@@ -948,7 +974,7 @@ class KnowledgeBase:
                 - "dynamic": Choose format based on content type
                 Defaults to "text".
             vector_search_top_k (int, optional): Number of vector results to retrieve per query
-                before reranking/RSE. Defaults to 200.
+                before reranking/RSE. If omitted, profile default is used.
 
         Returns:
             list[dict]: List of segment information dictionaries, ordered by relevance.
@@ -1008,6 +1034,12 @@ class KnowledgeBase:
             })
             
             # check if the rse_params is a preset name and convert it to a dictionary if it is
+            profile_query_defaults = get_profile_preset(self.profile).get("query_defaults", {})
+            if rse_params is None:
+                rse_params = profile_query_defaults.get("rse_params", "balanced")
+            if vector_search_top_k is None:
+                vector_search_top_k = profile_query_defaults.get("vector_search_top_k", 200)
+
             if isinstance(rse_params, str) and rse_params in RSE_PARAMS_PRESETS:
                 rse_params = RSE_PARAMS_PRESETS[rse_params]
             elif isinstance(rse_params, str):
