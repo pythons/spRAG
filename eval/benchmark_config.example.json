@@ -1,0 +1,31 @@
+{
+  "name": "finance-legal-h1-sprint-3",
+  "baseline": "top_k",
+  "lower_is_better": ["latency_ms", "cost_usd"],
+  "runs": [
+    {
+      "name": "top_k",
+      "metrics": {
+        "accuracy": 0.32,
+        "latency_ms": 920,
+        "cost_usd": 0.011
+      }
+    },
+    {
+      "name": "rse_only",
+      "metrics": {
+        "accuracy": 0.67,
+        "latency_ms": 980,
+        "cost_usd": 0.014
+      }
+    },
+    {
+      "name": "cch_rse",
+      "metrics": {
+        "accuracy": 0.79,
+        "latency_ms": 1080,
+        "cost_usd": 0.018
+      }
+    }
+  ]
+}

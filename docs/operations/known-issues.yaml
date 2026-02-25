@@ -1,0 +1,44 @@
+{
+  "status_definitions": [
+    {"name": "Open", "description": "Issue exists with no validated workaround"},
+    {"name": "Mitigated", "description": "Workaround available"},
+    {"name": "Fixed", "description": "Fix merged and released"}
+  ],
+  "items": [
+    {
+      "area": "Vector DB",
+      "component": "Weaviate",
+      "symptom": "Connection/setup incompatibility on specific client versions",
+      "workaround": "Pin tested client versions and verify gRPC settings",
+      "status": "Mitigated"
+    },
+    {
+      "area": "Chat DB",
+      "component": "SQLite chat thread",
+      "symptom": "Legacy rows can fail JSON parsing",
+      "workaround": "Fallback parser for legacy payload formats",
+      "status": "Fixed"
+    },
+    {
+      "area": "Metadata",
+      "component": "Persistent config",
+      "symptom": "Legacy metadata payload parsing inconsistencies",
+      "workaround": "Safe parser and schema/version migration path",
+      "status": "Fixed"
+    },
+    {
+      "area": "Providers",
+      "component": "Gemini/OpenAI-compatible",
+      "symptom": "Provider package/import mismatch can fail at runtime",
+      "workaround": "Use lazy imports and explicit dependency guidance",
+      "status": "Mitigated"
+    },
+    {
+      "area": "Retrieval Perf",
+      "component": "Large top_k defaults",
+      "symptom": "Query-time latency spikes on large corpora",
+      "workaround": "Tune vector_search_top_k per workload",
+      "status": "Mitigated"
+    }
+  ]
+}

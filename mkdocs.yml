@@ -46,6 +46,12 @@ nav:
   - API:
     - KnowledgeBase: api/knowledge_base.md
     - Chat: api/chat.md
+  - Strategy:
+    - 2026 H1 Roadmap: strategy/roadmap-2026-h1.md
+  - Operations:
+    - Release Playbook: operations/release-playbook.md
+    - Release Notes Template: operations/release-notes-template.md
+    - Known Issues Matrix: operations/known-issues-matrix.md
   - Community:
     - Contributing: community/contributing.md
     - Support: community/support.md
