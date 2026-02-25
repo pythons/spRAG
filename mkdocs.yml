@@ -44,6 +44,7 @@ nav:
     - Config Schema: concepts/config-schema.md
     - Diagnostics: concepts/diagnostics.md
     - Telemetry: concepts/telemetry.md
+    - SDK Facade: concepts/sdk.md
     - Chat: concepts/chat.md
     - Citations: concepts/citations.md
     - VLM File Parsing: concepts/vlm.md
@@ -51,6 +52,7 @@ nav:
   - API:
     - KnowledgeBase: api/knowledge_base.md
     - Chat: api/chat.md
+    - SDK: api/sdk.md
   - Strategy:
     - 2026 H1 Roadmap: strategy/roadmap-2026-h1.md
     - Benchmark Policy: strategy/benchmark-policy.md

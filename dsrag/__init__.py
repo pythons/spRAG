@@ -24,6 +24,15 @@ from dsrag.telemetry import (
     emit_telemetry_event,
     sanitize_telemetry_payload,
 )
+from dsrag.sdk import (
+    SDK_SCHEMA_VERSION,
+    DSRAGSDK,
+    CreateKBRequest,
+    AddDocumentRequest,
+    QueryRequest,
+    ExportConfigRequest,
+    GetTelemetryRequest,
+)
 
 # Configure the root dsrag logger with a NullHandler to prevent "No handler found" warnings
 # This follows Python best practices for library logging
@@ -52,4 +61,11 @@ __all__ = [
     "build_telemetry_event",
     "emit_telemetry_event",
     "sanitize_telemetry_payload",
+    "SDK_SCHEMA_VERSION",
+    "DSRAGSDK",
+    "CreateKBRequest",
+    "AddDocumentRequest",
+    "QueryRequest",
+    "ExportConfigRequest",
+    "GetTelemetryRequest",
 ]
