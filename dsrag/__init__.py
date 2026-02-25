@@ -10,6 +10,14 @@ from dsrag.templates import (
     create_kb_from_template,
     query_with_template,
 )
+from dsrag.telemetry import (
+    InMemoryTelemetrySink,
+    LoggingTelemetrySink,
+    NullTelemetrySink,
+    build_telemetry_event,
+    emit_telemetry_event,
+    sanitize_telemetry_payload,
+)
 
 # Configure the root dsrag logger with a NullHandler to prevent "No handler found" warnings
 # This follows Python best practices for library logging
@@ -28,4 +36,10 @@ __all__ = [
     "apply_template_to_query_kwargs",
     "create_kb_from_template",
     "query_with_template",
+    "InMemoryTelemetrySink",
+    "LoggingTelemetrySink",
+    "NullTelemetrySink",
+    "build_telemetry_event",
+    "emit_telemetry_event",
+    "sanitize_telemetry_payload",
 ]

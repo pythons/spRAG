@@ -42,6 +42,7 @@ nav:
     - Vertical Templates: concepts/templates.md
     - Configuration: concepts/config.md
     - Diagnostics: concepts/diagnostics.md
+    - Telemetry: concepts/telemetry.md
     - Chat: concepts/chat.md
     - Citations: concepts/citations.md
     - VLM File Parsing: concepts/vlm.md

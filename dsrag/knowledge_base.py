@@ -36,6 +36,10 @@ from dsrag.config.profiles import (
     get_profile_preset,
     merge_with_profile_defaults,
 )
+from dsrag.telemetry import (
+    NullTelemetrySink,
+    emit_telemetry_event,
+)
 
 
 SENSITIVE_CONFIG_KEYS = {
@@ -88,6 +92,7 @@ class KnowledgeBase:
         metadata_storage: Optional[MetadataStorage] = None,
         vlm_client: Optional[VLM] = None,
         profile: str = DEFAULT_PROFILE,
+        telemetry_sink=None,
     ):
         """Initialize a KnowledgeBase instance.
 
@@ -116,6 +121,8 @@ class KnowledgeBase:
                 Defaults to LocalMetadataStorage.
             vlm_client (Optional[VLM], optional): VLM client for parsing documents. 
                 Defaults to None.
+            telemetry_sink (optional): Structured telemetry sink with `emit(event)` method.
+                Defaults to an in-process no-op sink.
 
         Raises:
             ValueError: If KB exists and exists_ok is False.
@@ -124,6 +131,7 @@ class KnowledgeBase:
         self.storage_directory = os.path.expanduser(storage_directory)
         self.metadata_storage = metadata_storage if metadata_storage else LocalMetadataStorage(self.storage_directory)
         self.profile = profile
+        self.telemetry_sink = telemetry_sink if telemetry_sink is not None else NullTelemetrySink()
 
         if save_metadata_to_disk:
             # load the KB if it exists; otherwise, initialize it and save it to disk
@@ -518,6 +526,14 @@ class KnowledgeBase:
                     "Document already exists in knowledge base, skipping", 
                     extra=base_extra
                 )
+                emit_telemetry_event(
+                    sink=self.telemetry_sink,
+                    event_type="add_document",
+                    kb_id=self.kb_id,
+                    profile=self.profile,
+                    status="skipped",
+                    payload={"doc_id": doc_id, "reason": "doc_already_exists"},
+                )
                 return
             
             # verify the doc_id is valid
@@ -658,6 +674,20 @@ class KnowledgeBase:
                 **base_extra,
                 "total_duration_s": round(overall_duration, 4)
             })
+            emit_telemetry_event(
+                sink=self.telemetry_sink,
+                event_type="add_document",
+                kb_id=self.kb_id,
+                profile=self.profile,
+                status="success",
+                duration_ms=overall_duration * 1000,
+                payload={
+                    "doc_id": doc_id,
+                    "num_sections": len(sections),
+                    "num_chunks": len(chunks),
+                    "has_file_path": bool(file_path),
+                },
+            )
             
         except Exception as e:
             # Log error with exception info
@@ -670,6 +700,16 @@ class KnowledgeBase:
                     "error": str(e)
                 },
                 exc_info=True
+            )
+            emit_telemetry_event(
+                sink=self.telemetry_sink,
+                event_type="add_document",
+                kb_id=self.kb_id,
+                profile=self.profile,
+                status="error",
+                duration_ms=overall_duration * 1000,
+                error=str(e),
+                payload={"doc_id": doc_id, "has_file_path": bool(file_path)},
             )
             # Re-raise the exception
             raise
@@ -1111,6 +1151,20 @@ class KnowledgeBase:
             # verify that we have a valid meta-document - otherwise return an empty list of segments
             if len(document_splits) == 0:
                 query_logger.info("Query returned no results (empty meta-document)", extra=base_extra)
+                emit_telemetry_event(
+                    sink=self.telemetry_sink,
+                    event_type="query",
+                    kb_id=self.kb_id,
+                    profile=self.profile,
+                    status="success",
+                    duration_ms=(time.perf_counter() - overall_start_time) * 1000,
+                    payload={
+                        "num_search_queries": len(search_queries),
+                        "num_results": 0,
+                        "return_mode": return_mode,
+                        "vector_search_top_k": vector_search_top_k,
+                    },
+                )
                 return []
 
             # get the length of the meta-document so we don't have to pass in the whole list of splits
@@ -1209,6 +1263,22 @@ class KnowledgeBase:
                 "total_duration_s": round(overall_duration, 4), 
                 "num_final_segments": len(relevant_segment_info)
             })
+            emit_telemetry_event(
+                sink=self.telemetry_sink,
+                event_type="query",
+                kb_id=self.kb_id,
+                profile=self.profile,
+                status="success",
+                duration_ms=overall_duration * 1000,
+                payload={
+                    "num_search_queries": len(search_queries),
+                    "num_results": len(relevant_segment_info),
+                    "return_mode": return_mode,
+                    "vector_search_top_k": vector_search_top_k,
+                    "rse_max_length": max_length,
+                    "rse_overall_max_length": overall_max_length,
+                },
+            )
 
             return relevant_segment_info
             
@@ -1223,6 +1293,20 @@ class KnowledgeBase:
                     "error": str(e)
                 },
                 exc_info=True
+            )
+            emit_telemetry_event(
+                sink=self.telemetry_sink,
+                event_type="query",
+                kb_id=self.kb_id,
+                profile=self.profile,
+                status="error",
+                duration_ms=overall_duration * 1000,
+                error=str(e),
+                payload={
+                    "num_search_queries": len(search_queries),
+                    "return_mode": return_mode,
+                    "vector_search_top_k": vector_search_top_k,
+                },
             )
             # Re-raise the exception
             raise
