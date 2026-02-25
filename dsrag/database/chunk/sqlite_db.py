@@ -7,6 +7,10 @@ import logging
 
 from dsrag.database.chunk.db import ChunkDB
 from dsrag.database.chunk.types import FormattedDocument
+from dsrag.database.chunk.metadata_utils import (
+    deserialize_metadata,
+    serialize_metadata,
+)
 
 
 class SQLiteDB(ChunkDB):
@@ -99,11 +103,11 @@ class SQLiteDB(ChunkDB):
 
         raise last_error
 
-    def add_document(self, doc_id: str, chunks: dict[int, dict[str, Any]], supp_id: str = "", metadata: dict = {}) -> None:
+    def add_document(self, doc_id: str, chunks: dict[int, dict[str, Any]], supp_id: str = "", metadata: Optional[dict] = None) -> None:
         def _add_doc(conn: sqlite3.Connection, doc_id: str, chunks: dict, supp_id: str, metadata: dict) -> None:
             c = conn.cursor()
             created_on = str(int(time.time()))
-            metadata_str = str(metadata)
+            metadata_str = serialize_metadata(metadata)
 
             for chunk_index, chunk in chunks.items():
                 chunk_text = chunk.get("chunk_text", "")
@@ -154,10 +158,8 @@ class SQLiteDB(ChunkDB):
         if include_content:
             columns += ["chunk_text", "chunk_index"]
 
-        query_statement = (
-            f"SELECT {', '.join(columns)} FROM documents WHERE doc_id='{doc_id}'"
-        )
-        c.execute(query_statement)
+        query_statement = f"SELECT {', '.join(columns)} FROM documents WHERE doc_id=?"
+        c.execute(query_statement, (doc_id,))
         results = c.fetchall()
         conn.close()
 
@@ -182,8 +184,7 @@ class SQLiteDB(ChunkDB):
         metadata = results[0][columns.index("metadata")]
 
         # Convert the metadata string back into a dictionary
-        if metadata:
-            metadata = eval(metadata)
+        metadata = deserialize_metadata(metadata)
 
         return FormattedDocument(
             id=doc_id,
@@ -201,7 +202,8 @@ class SQLiteDB(ChunkDB):
         conn = sqlite3.connect(os.path.join(self.db_path, f"{self.kb_id}.db"))
         c = conn.cursor()
         c.execute(
-            f"SELECT chunk_text FROM documents WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            "SELECT chunk_text FROM documents WHERE doc_id=? AND chunk_index=?",
+            (doc_id, chunk_index),
         )
         result = c.fetchone()
         conn.close()
@@ -214,7 +216,8 @@ class SQLiteDB(ChunkDB):
         conn = sqlite3.connect(os.path.join(self.db_path, f"{self.kb_id}.db"))
         c = conn.cursor()
         c.execute(
-            f"SELECT is_visual FROM documents WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            "SELECT is_visual FROM documents WHERE doc_id=? AND chunk_index=?",
+            (doc_id, chunk_index),
         )
         result = c.fetchone()
         conn.close()
@@ -227,7 +230,8 @@ class SQLiteDB(ChunkDB):
         conn = sqlite3.connect(os.path.join(self.db_path, f"{self.kb_id}.db"))
         c = conn.cursor()
         c.execute(
-            f"SELECT chunk_page_start, chunk_page_end FROM documents WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            "SELECT chunk_page_start, chunk_page_end FROM documents WHERE doc_id=? AND chunk_index=?",
+            (doc_id, chunk_index),
         )
         result = c.fetchone()
         conn.close()
@@ -240,7 +244,8 @@ class SQLiteDB(ChunkDB):
         conn = sqlite3.connect(os.path.join(self.db_path, f"{self.kb_id}.db"))
         c = conn.cursor()
         c.execute(
-            f"SELECT document_title FROM documents WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            "SELECT document_title FROM documents WHERE doc_id=? AND chunk_index=?",
+            (doc_id, chunk_index),
         )
         result = c.fetchone()
         conn.close()
@@ -253,7 +258,8 @@ class SQLiteDB(ChunkDB):
         conn = sqlite3.connect(os.path.join(self.db_path, f"{self.kb_id}.db"))
         c = conn.cursor()
         c.execute(
-            f"SELECT document_summary FROM documents WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            "SELECT document_summary FROM documents WHERE doc_id=? AND chunk_index=?",
+            (doc_id, chunk_index),
         )
         result = c.fetchone()
         conn.close()
@@ -266,7 +272,8 @@ class SQLiteDB(ChunkDB):
         conn = sqlite3.connect(os.path.join(self.db_path, f"{self.kb_id}.db"))
         c = conn.cursor()
         c.execute(
-            f"SELECT section_title FROM documents WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            "SELECT section_title FROM documents WHERE doc_id=? AND chunk_index=?",
+            (doc_id, chunk_index),
         )
         result = c.fetchone()
         conn.close()
@@ -279,7 +286,8 @@ class SQLiteDB(ChunkDB):
         conn = sqlite3.connect(os.path.join(self.db_path, f"{self.kb_id}.db"))
         c = conn.cursor()
         c.execute(
-            f"SELECT section_summary FROM documents WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            "SELECT section_summary FROM documents WHERE doc_id=? AND chunk_index=?",
+            (doc_id, chunk_index),
         )
         result = c.fetchone()
         conn.close()
@@ -293,8 +301,10 @@ class SQLiteDB(ChunkDB):
         c = conn.cursor()
         query_statement = "SELECT DISTINCT doc_id FROM documents"
         if supp_id:
-            query_statement += f" WHERE supp_id='{supp_id}'"
-        c.execute(query_statement)
+            query_statement += " WHERE supp_id=?"
+            c.execute(query_statement, (supp_id,))
+        else:
+            c.execute(query_statement)
         results = c.fetchall()
         conn.close()
         return [result[0] for result in results]

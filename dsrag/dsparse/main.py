@@ -23,10 +23,10 @@ from .file_parsing.vlm_clients import VLM
 def parse_and_chunk(
     kb_id: str, 
     doc_id: str, 
-    file_parsing_config: FileParsingConfig = {}, 
-    semantic_sectioning_config: SemanticSectioningConfig = {}, 
-    chunking_config: ChunkingConfig = {}, 
-    file_system: FileSystem = {}, 
+    file_parsing_config: Optional[FileParsingConfig] = None, 
+    semantic_sectioning_config: Optional[SemanticSectioningConfig] = None, 
+    chunking_config: Optional[ChunkingConfig] = None, 
+    file_system: Optional[FileSystem] = None, 
     file_path: str = None, 
     text: str = None,
     vlm_client: Optional[VLM] = None,
@@ -79,6 +79,10 @@ def parse_and_chunk(
         - is_visual: bool - whether the chunk is visual (e.g., an image)
     """
     # Initialize logging context with operation identifiers
+    file_parsing_config = file_parsing_config or {}
+    semantic_sectioning_config = semantic_sectioning_config or {}
+    chunking_config = chunking_config or {}
+
     base_extra = {"kb_id": kb_id, "doc_id": doc_id}
     if file_path:
         base_extra["file_path"] = file_path

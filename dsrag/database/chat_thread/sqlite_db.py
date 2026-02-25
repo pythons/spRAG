@@ -1,17 +1,43 @@
 import sqlite3
 import os
 import json
+import ast
 from .db import ChatThreadDB
 import uuid
+
+
+def _safe_json_loads(value, default):
+    if value in (None, ""):
+        return default
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        # Backward compatibility for legacy repr-style payloads
+        try:
+            parsed = ast.literal_eval(value)
+            return parsed
+        except (ValueError, SyntaxError):
+            return default
 
 class SQLiteChatThreadDB(ChatThreadDB):
 
     def __init__(self, storage_directory: str = "~/dsRAG"):
         # Check if the directory exists, if not create it
         self.chat_thread_columns = ["thread_id", "supp_id", "kb_ids", "model", "temperature", "system_message", "auto_query_model", "auto_query_guidance", "target_output_length", "max_chat_history_tokens", "rse_params"]
-        self.interactions_columns = ["thread_id", "message_id", "user_input", "user_input_timestamp", "model_response", "model_response_timestamp", "relevant_segments", "search_queries", "citations"]
+        self.interactions_columns = [
+            "thread_id",
+            "message_id",
+            "user_input",
+            "user_input_timestamp",
+            "model_response",
+            "model_response_timestamp",
+            "relevant_segments",
+            "search_queries",
+            "citations",
+            "model_response_status",
+        ]
         self.chat_thread_column_types = ["VARCHAR(256) PRIMARY KEY", "TEXT", "TEXT", "TEXT", "REAL", "TEXT", "TEXT", "TEXT", "TEXT", "INTEGER", "TEXT"]
-        self.interactions_column_types = ["VARCHAR(256)", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT"]
+        self.interactions_column_types = ["VARCHAR(256)", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT"]
         self.storage_directory = os.path.expanduser(storage_directory)
         if not os.path.exists(self.storage_directory):
             os.makedirs(self.storage_directory)
@@ -37,6 +63,7 @@ class SQLiteChatThreadDB(ChatThreadDB):
     def create_chat_thread(self, chat_thread_params: dict) -> dict:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
+        chat_thread_params = chat_thread_params.copy()
         # Convert the kb_ids list to a string
         chat_thread_params["kb_ids"] = ",".join(chat_thread_params["kb_ids"])
         # Convert rse_params dict to JSON string if it exists
@@ -72,15 +99,9 @@ class SQLiteChatThreadDB(ChatThreadDB):
             formatted_chat_thread["id"] = formatted_chat_thread["thread_id"]
             # Remove the thread_id key
             del formatted_chat_thread["thread_id"]
-            formatted_chat_thread["kb_ids"] = formatted_chat_thread["kb_ids"].split(",")
+            formatted_chat_thread["kb_ids"] = formatted_chat_thread["kb_ids"].split(",") if formatted_chat_thread["kb_ids"] else []
             # Parse rse_params from JSON if it exists and is not empty
-            if formatted_chat_thread["rse_params"]:
-                try:
-                    formatted_chat_thread["rse_params"] = json.loads(formatted_chat_thread["rse_params"])
-                except json.JSONDecodeError:
-                    formatted_chat_thread["rse_params"] = {}
-            else:
-                formatted_chat_thread["rse_params"] = {}
+            formatted_chat_thread["rse_params"] = _safe_json_loads(formatted_chat_thread["rse_params"], {})
             formatted_chat_threads.append(formatted_chat_thread)
 
         return formatted_chat_threads
@@ -105,17 +126,11 @@ class SQLiteChatThreadDB(ChatThreadDB):
         # Format the chat thread
         chat_thread = dict(zip(self.chat_thread_columns, chat_thread))
         # Format the kb_ids string to a list
-        chat_thread["kb_ids"] = chat_thread["kb_ids"].split(",")
+        chat_thread["kb_ids"] = chat_thread["kb_ids"].split(",") if chat_thread["kb_ids"] else []
         chat_thread["id"] = chat_thread["thread_id"]
         del chat_thread["thread_id"]
         # Parse rse_params from JSON if it exists and is not empty
-        if chat_thread["rse_params"]:
-            try:
-                chat_thread["rse_params"] = json.loads(chat_thread["rse_params"])
-            except json.JSONDecodeError:
-                chat_thread["rse_params"] = {}
-        else:
-            chat_thread["rse_params"] = {}
+        chat_thread["rse_params"] = _safe_json_loads(chat_thread["rse_params"], {})
         # Now get the interactions
         query_statement = f"SELECT {', '.join(self.interactions_columns)} FROM interactions WHERE thread_id = ?"
         c.execute(query_statement, (thread_id,))
@@ -123,19 +138,20 @@ class SQLiteChatThreadDB(ChatThreadDB):
         # Format the interactions
         formatted_interactions = []
         for interaction in interactions:
+            interaction_dict = dict(zip(self.interactions_columns, interaction))
             formatted_interaction = {
                 "user_input": {
-                    "content": interaction[1],
-                    "timestamp": interaction[2]
+                    "content": interaction_dict["user_input"],
+                    "timestamp": interaction_dict["user_input_timestamp"],
                 },
                 "model_response": {
-                    "content": interaction[3],
-                    "timestamp": interaction[4],
-                    "citations": json.loads(interaction[7]) if interaction[7] else [],
-                    "status": interaction[8] if len(interaction) > 8 and interaction[8] else "finished"
+                    "content": interaction_dict["model_response"],
+                    "timestamp": interaction_dict["model_response_timestamp"],
+                    "citations": _safe_json_loads(interaction_dict["citations"], []),
+                    "status": interaction_dict.get("model_response_status") or "finished",
                 },
-                "relevant_segments": json.loads(interaction[5]),
-                "search_queries": json.loads(interaction[6])
+                "relevant_segments": _safe_json_loads(interaction_dict["relevant_segments"], []),
+                "search_queries": _safe_json_loads(interaction_dict["search_queries"], []),
             }
             formatted_interactions.append(formatted_interaction)
         
@@ -158,6 +174,7 @@ class SQLiteChatThreadDB(ChatThreadDB):
     def update_chat_thread(self, thread_id: str, chat_thread_params: dict) -> dict:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
+        chat_thread_params = chat_thread_params.copy()
         # Convert the kb_ids list to a string
         chat_thread_params["kb_ids"] = ",".join(chat_thread_params["kb_ids"])
         # Convert rse_params dict to JSON string if it exists
@@ -166,9 +183,9 @@ class SQLiteChatThreadDB(ChatThreadDB):
         else:
             chat_thread_params["rse_params"] = ""
             
-        c.execute("UPDATE chat_threads SET supp_id = ?, kb_ids = ?, model = ?, temperature = ?, system_message = ?, auto_query_guidance = ?, target_output_length = ?, max_chat_history_tokens = ?, rse_params = ? WHERE thread_id = ?", 
+        c.execute("UPDATE chat_threads SET supp_id = ?, kb_ids = ?, model = ?, temperature = ?, system_message = ?, auto_query_model = ?, auto_query_guidance = ?, target_output_length = ?, max_chat_history_tokens = ?, rse_params = ? WHERE thread_id = ?", 
                  (chat_thread_params["supp_id"], chat_thread_params["kb_ids"], chat_thread_params["model"], chat_thread_params["temperature"], 
-                  chat_thread_params["system_message"], chat_thread_params["auto_query_guidance"], chat_thread_params["target_output_length"], 
+                  chat_thread_params["system_message"], chat_thread_params["auto_query_model"], chat_thread_params["auto_query_guidance"], chat_thread_params["target_output_length"], 
                   chat_thread_params["max_chat_history_tokens"], chat_thread_params["rse_params"], thread_id))
         conn.commit()
         conn.close()

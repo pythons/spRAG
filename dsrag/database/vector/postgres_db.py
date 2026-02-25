@@ -1,3 +1,5 @@
+import os
+import re
 from typing import Optional, Sequence
 import json
 import numpy as np
@@ -13,7 +15,7 @@ pgvector = LazyLoader("pgvector")
 # We'll import register_vector when needed to avoid immediate import
 
 
-def format_metadata_filter(metadata_filter: MetadataFilter) -> dict:
+def format_metadata_filter(metadata_filter: MetadataFilter) -> tuple[str, tuple]:
     """
     Format the metadata filter to be used in the ChromaDB query method.
 
@@ -27,6 +29,9 @@ def format_metadata_filter(metadata_filter: MetadataFilter) -> dict:
     field = metadata_filter['field']
     operator = metadata_filter['operator']
     value = metadata_filter['value']
+
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", field):
+        raise ValueError(f"Invalid metadata filter field: {field}")
 
     # Map the operator to SQL syntax
     operator_map = {
@@ -50,38 +55,46 @@ def format_metadata_filter(metadata_filter: MetadataFilter) -> dict:
     if isinstance(value, list):
         # Convert list to a tuple for SQL IN expressions
         value_placeholder = f"({', '.join(['%s'] * len(value))})"
+        params = tuple([field, *value])
     else:
         # Single value placeholder
         value_placeholder = "%s"
+        params = (field, value)
 
     # Construct the SQL filter expression
     if operator in ['in', 'not_in']:
-        filter_expression = f"metadata->>'{field}' {sql_operator} {value_placeholder}"
+        filter_expression = f"metadata->>%s {sql_operator} {value_placeholder}"
     else:
-        filter_expression = f"metadata->>'{field}' {sql_operator} {value_placeholder}"
+        filter_expression = f"metadata->>%s {sql_operator} {value_placeholder}"
 
-    return filter_expression
+    return filter_expression, params
 
 
 class PostgresVectorDB(VectorDB):
-    def __init__(self, kb_id: str, username: str, password: str, database: str, host: str = "localhost", port: int = 5432, vector_dimension: int = 768):
+    def __init__(self, kb_id: str, username: Optional[str] = None, password: Optional[str] = None, database: Optional[str] = None, host: str = "localhost", port: int = 5432, vector_dimension: int = 768):
         self.kb_id = kb_id
         self.table_name = f'{kb_id}_vectors'
         self.index_name = f'{kb_id}_embedding_index'
-        self.username = username
-        self.password = password
-        self.database = database
-        self.host = host
-        self.port = port
+        self.username = username or os.environ.get("POSTGRES_USER")
+        self.password = password or os.environ.get("POSTGRES_PASSWORD")
+        self.database = database or os.environ.get("POSTGRES_DB")
+        self.host = host or os.environ.get("POSTGRES_HOST", "localhost")
+        self.port = port or int(os.environ.get("POSTGRES_PORT", 5432))
         self.vector_dimension = vector_dimension
+
+        if not self.username or not self.password or not self.database:
+            raise ValueError(
+                "PostgresVectorDB requires username, password, and database. "
+                "Provide them directly or set POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB."
+            )
 
         # Create the extension if it doesn't exist
         conn = psycopg2.connect(
-            dbname=database,
-            user=username,
-            password=password,
-            host=host,
-            port=port
+            dbname=self.database,
+            user=self.username,
+            password=self.password,
+            host=self.host,
+            port=self.port,
         )
         cur = conn.cursor()
         cur.execute('CREATE EXTENSION IF NOT EXISTS vector')
@@ -99,8 +112,6 @@ class PostgresVectorDB(VectorDB):
             .format(sql.Literal(self.table_name))
         )
         exists = cur.fetchone()[0]
-        print("exists", exists)
-
         # Create the table for this kb id if it doesn't exist
         if not exists:
             cur.execute(
@@ -141,7 +152,7 @@ class PostgresVectorDB(VectorDB):
 
             cur = conn.cursor()
             cur.execute(
-                sql.SQL("SELECT COUNT(*) FROM {}").FORMAT(sql.Identifier(self.table_name)))
+                sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(self.table_name)))
             count = cur.fetchone()[0]
         finally:
             conn.close()
@@ -211,12 +222,10 @@ class PostgresVectorDB(VectorDB):
         query_vector = np.array(query_vector)
 
         if metadata_filter:
-            filter_expression = format_metadata_filter(metadata_filter)
+            filter_expression, filter_params = format_metadata_filter(metadata_filter)
 
         from psycopg2 import sql
         if metadata_filter:
-            filter_value = metadata_filter['value']
-
             query = sql.SQL("""
                 SELECT metadata, embedding, 1 - (embedding <=> %s) AS cosine_similarity
                 FROM {} 
@@ -228,10 +237,7 @@ class PostgresVectorDB(VectorDB):
                 sql.SQL(filter_expression)
             )
 
-            if isinstance(filter_value, list):
-                params = (query_vector, *filter_value, top_k)
-            else:
-                params = (query_vector, filter_value, top_k)
+            params = (query_vector, *filter_params, top_k)
 
             cur.execute(query, params)
         else:
@@ -283,7 +289,6 @@ class PostgresVectorDB(VectorDB):
             **super().to_dict(),
             "kb_id": self.kb_id,
             "username": self.username,
-            "password": self.password,
             "database": self.database,
             "host": self.host,
             "port": self.port,

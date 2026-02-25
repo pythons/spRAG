@@ -1,9 +1,14 @@
+import os
 import time
 from typing import Any, Optional
 
 from dsrag.database.chunk.db import ChunkDB
 from dsrag.database.chunk.types import FormattedDocument
 from dsrag.utils.imports import LazyLoader
+from dsrag.database.chunk.metadata_utils import (
+    deserialize_metadata,
+    serialize_metadata,
+)
 
 # Lazy load PostgreSQL dependencies
 psycopg2 = LazyLoader("psycopg2", "psycopg2-binary")
@@ -11,13 +16,19 @@ psycopg2 = LazyLoader("psycopg2", "psycopg2-binary")
 
 class PostgresChunkDB(ChunkDB):
 
-    def __init__(self, kb_id: str, username: str, password: str, database: str, host: str="localhost", port: int = 5432) -> None:
+    def __init__(self, kb_id: str, username: Optional[str] = None, password: Optional[str] = None, database: Optional[str] = None, host: str="localhost", port: int = 5432) -> None:
         self.kb_id = kb_id
-        self.username = username
-        self.password = password
-        self.database = database
-        self.host = host
-        self.port = port
+        self.username = username or os.environ.get("POSTGRES_USER")
+        self.password = password or os.environ.get("POSTGRES_PASSWORD")
+        self.database = database or os.environ.get("POSTGRES_DB")
+        self.host = host or os.environ.get("POSTGRES_HOST", "localhost")
+        self.port = port or int(os.environ.get("POSTGRES_PORT", 5432))
+
+        if not self.username or not self.password or not self.database:
+            raise ValueError(
+                "PostgresChunkDB requires username, password, and database. "
+                "Provide them directly or set POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB."
+            )
         self.table_name = f"{kb_id}_documents"
 
         self.columns = [
@@ -46,12 +57,18 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
-        cur.execute(f"SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = '{self.table_name}')")
+        from psycopg2 import sql
+        cur.execute(
+            sql.SQL(
+                "SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = %s)"
+            ),
+            (self.table_name,),
+        )
         exists = cur.fetchone()[0]
 
         if not exists:
             # Create a table for this kb_id
-            query_statement = f"CREATE TABLE {self.table_name} ("
+            query_statement = sql.SQL("CREATE TABLE {} (").format(sql.Identifier(self.table_name)).as_string(cur)
             for column in self.columns:
                 query_statement += f"{column['name']} {column['type']}, "
             query_statement = query_statement[:-2] + ")"
@@ -59,16 +76,26 @@ class PostgresChunkDB(ChunkDB):
             conn.commit()
         else:
             # Check if we need to add any columns to the table. This happens if the columns have been updated
-            cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{self.table_name}'")
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = %s",
+                (self.table_name,),
+            )
             columns = cur.fetchall()
             column_names = [column[0] for column in columns]
             for column in self.columns:
                 if column["name"] not in column_names:
                     # Add the column to the table
-                    cur.execute("ALTER TABLE {}_chunks ADD COLUMN {} {}".format(kb_id, column["name"], column["type"]))
+                    cur.execute(
+                        sql.SQL("ALTER TABLE {} ADD COLUMN {} {}").format(
+                            sql.Identifier(self.table_name),
+                            sql.Identifier(column["name"]),
+                            sql.SQL(column["type"]),
+                        )
+                    )
+            conn.commit()
         conn.close()
 
-    def add_document(self, doc_id: str, chunks: dict[int, dict[str, Any]], supp_id: str = "", metadata: dict = {}) -> None:
+    def add_document(self, doc_id: str, chunks: dict[int, dict[str, Any]], supp_id: str = "", metadata: Optional[dict] = None) -> None:
         # Add the docs to the sqlite table
         conn = psycopg2.connect(
             dbname=self.database,
@@ -82,7 +109,7 @@ class PostgresChunkDB(ChunkDB):
         created_on = str(int(time.time()))
 
         # Turn the metadata object into a string
-        metadata = str(metadata)
+        metadata = serialize_metadata(metadata)
 
         # Get the data from the dictionary
         for chunk_index, chunk in chunks.items():
@@ -126,7 +153,11 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
-        cur.execute(f"DELETE FROM {self.table_name} WHERE doc_id='{doc_id}'")
+        from psycopg2 import sql
+        cur.execute(
+            sql.SQL("DELETE FROM {} WHERE doc_id = %s").format(sql.Identifier(self.table_name)),
+            (doc_id,),
+        )
         conn.commit()
         conn.close()
 
@@ -146,10 +177,12 @@ class PostgresChunkDB(ChunkDB):
         if include_content:
             columns += ["chunk_text", "chunk_index"]
 
-        query_statement = (
-            f"SELECT {', '.join(columns)} FROM {self.table_name} WHERE doc_id='{doc_id}'"
+        from psycopg2 import sql
+        query_statement = sql.SQL("SELECT {} FROM {} WHERE doc_id = %s").format(
+            sql.SQL(", ").join([sql.Identifier(c) for c in columns]),
+            sql.Identifier(self.table_name),
         )
-        cur.execute(query_statement)
+        cur.execute(query_statement, (doc_id,))
         results = cur.fetchall()
         conn.close()
 
@@ -174,8 +207,7 @@ class PostgresChunkDB(ChunkDB):
         metadata = results[0][columns.index("metadata")]
 
         # Convert the metadata string back into a dictionary
-        if metadata:
-            metadata = eval(metadata)
+        metadata = deserialize_metadata(metadata)
 
         return FormattedDocument(
             id=doc_id,
@@ -197,8 +229,12 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
+        from psycopg2 import sql
         cur.execute(
-            f"SELECT chunk_text FROM {self.table_name} WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            sql.SQL("SELECT chunk_text FROM {} WHERE doc_id = %s AND chunk_index = %s").format(
+                sql.Identifier(self.table_name)
+            ),
+            (doc_id, chunk_index),
         )
         result = cur.fetchone()
         conn.close()
@@ -216,8 +252,12 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
+        from psycopg2 import sql
         cur.execute(
-            f"SELECT is_visual FROM {self.table_name} WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            sql.SQL("SELECT is_visual FROM {} WHERE doc_id = %s AND chunk_index = %s").format(
+                sql.Identifier(self.table_name)
+            ),
+            (doc_id, chunk_index),
         )
         result = cur.fetchone()
         conn.close()
@@ -235,8 +275,12 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
+        from psycopg2 import sql
         cur.execute(
-            f"SELECT chunk_page_start, chunk_page_end FROM {self.table_name} WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            sql.SQL("SELECT chunk_page_start, chunk_page_end FROM {} WHERE doc_id = %s AND chunk_index = %s").format(
+                sql.Identifier(self.table_name)
+            ),
+            (doc_id, chunk_index),
         )
         result = cur.fetchone()
         conn.close()
@@ -254,8 +298,12 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
+        from psycopg2 import sql
         cur.execute(
-            f"SELECT document_title FROM {self.table_name} WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            sql.SQL("SELECT document_title FROM {} WHERE doc_id = %s AND chunk_index = %s").format(
+                sql.Identifier(self.table_name)
+            ),
+            (doc_id, chunk_index),
         )
         result = cur.fetchone()
         conn.close()
@@ -273,8 +321,12 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
+        from psycopg2 import sql
         cur.execute(
-            f"SELECT document_summary FROM {self.table_name} WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            sql.SQL("SELECT document_summary FROM {} WHERE doc_id = %s AND chunk_index = %s").format(
+                sql.Identifier(self.table_name)
+            ),
+            (doc_id, chunk_index),
         )
         result = cur.fetchone()
         conn.close()
@@ -292,8 +344,12 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
+        from psycopg2 import sql
         cur.execute(
-            f"SELECT section_title FROM {self.table_name} WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            sql.SQL("SELECT section_title FROM {} WHERE doc_id = %s AND chunk_index = %s").format(
+                sql.Identifier(self.table_name)
+            ),
+            (doc_id, chunk_index),
         )
         result = cur.fetchone()
         conn.close()
@@ -311,8 +367,12 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
+        from psycopg2 import sql
         cur.execute(
-            f"SELECT section_summary FROM {self.table_name} WHERE doc_id='{doc_id}' AND chunk_index={chunk_index}"
+            sql.SQL("SELECT section_summary FROM {} WHERE doc_id = %s AND chunk_index = %s").format(
+                sql.Identifier(self.table_name)
+            ),
+            (doc_id, chunk_index),
         )
         result = cur.fetchone()
         conn.close()
@@ -330,10 +390,13 @@ class PostgresChunkDB(ChunkDB):
             port=self.port
         )
         cur = conn.cursor()
-        query_statement = f"SELECT DISTINCT doc_id FROM {self.table_name}"
+        from psycopg2 import sql
+        query_statement = sql.SQL("SELECT DISTINCT doc_id FROM {}").format(sql.Identifier(self.table_name))
         if supp_id:
-            query_statement += f" WHERE supp_id='{supp_id}'"
-        cur.execute(query_statement)
+            query_statement += sql.SQL(" WHERE supp_id = %s")
+            cur.execute(query_statement, (supp_id,))
+        else:
+            cur.execute(query_statement)
         results = cur.fetchall()
         conn.close()
         return [result[0] for result in results]
@@ -391,7 +454,6 @@ class PostgresChunkDB(ChunkDB):
             **super().to_dict(),
             "kb_id": self.kb_id,
             "username": self.username,
-            "password": self.password,
             "database": self.database,
             "host": self.host,
             "port": self.port,

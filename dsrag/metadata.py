@@ -152,8 +152,11 @@ class DynamoDBMetadataStorage(MetadataStorage):
         }
         components = data.get("components", {})
 
-        full_data = {**kb_metadata, "components": components,
-                     "language": item.get("language", "en")}
+        full_data = {
+            **kb_metadata,
+            "components": components,
+            "language": data.get("language", "en"),
+        }
 
         converted_data = convert_decimal_to_numbers(full_data)
         return converted_data

@@ -88,7 +88,7 @@ def get_search_queries(chat_messages: list[dict], kb_info: list[dict], auto_quer
             max_tokens=600,
             temperature=0.0
         )
-    except:
+    except Exception:
         # Fallback to a stronger model
         fallback_model = "claude-3-5-sonnet-20241022" if "gpt" in auto_query_model else "gpt-4o"
         queries = get_response(

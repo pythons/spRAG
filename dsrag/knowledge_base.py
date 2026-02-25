@@ -32,6 +32,37 @@ from dsrag.metadata import MetadataStorage, LocalMetadataStorage
 from dsrag.chat.citations import convert_elements_to_page_content
 from dsrag.dsparse.file_parsing.vlm_clients import VLM
 
+
+SENSITIVE_CONFIG_KEYS = {
+    "password",
+    "secret_key",
+    "access_key",
+    "access_secret",
+    "api_key",
+    "token",
+    "auth_token",
+    "weaviate_secret",
+}
+
+
+def _redact_sensitive_values(value):
+    if isinstance(value, dict):
+        redacted = {}
+        for key, nested_value in value.items():
+            normalized_key = key.lower()
+            if (
+                normalized_key in SENSITIVE_CONFIG_KEYS
+                or normalized_key.endswith("_password")
+                or normalized_key.endswith("_secret")
+            ):
+                continue
+            redacted[key] = _redact_sensitive_values(nested_value)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_sensitive_values(v) for v in value]
+    return value
+
+
 class KnowledgeBase:
     def __init__(
         self,
@@ -179,6 +210,7 @@ class KnowledgeBase:
             # Persist VLM client if present
             "vlm_client": (self.vlm_client.to_dict() if getattr(self, "vlm_client", None) else None),
         }
+        components = _redact_sensitive_values(components)
         # Combine metadata and components
         full_data = {**self.kb_metadata, "components": components}
 
@@ -283,14 +315,14 @@ class KnowledgeBase:
         text: str = "",
         file_path: str = "",
         document_title: str = "",
-        auto_context_config: dict = {},
-        file_parsing_config: dict = {},
-        semantic_sectioning_config: dict = {},
-        chunking_config: dict = {},
+        auto_context_config: Optional[dict] = None,
+        file_parsing_config: Optional[dict] = None,
+        semantic_sectioning_config: Optional[dict] = None,
+        chunking_config: Optional[dict] = None,
         chunk_size: int = None,
         min_length_for_chunking: int = None,
         supp_id: str = "",
-        metadata: dict = {},
+        metadata: Optional[dict] = None,
     ):
         """Add a document to the knowledge base.
 
@@ -416,6 +448,11 @@ class KnowledgeBase:
         """
         # Get a logger specific to ingestion operations
         ingestion_logger = logging.getLogger("dsrag.ingestion")
+        auto_context_config = auto_context_config or {}
+        file_parsing_config = file_parsing_config or {}
+        semantic_sectioning_config = semantic_sectioning_config or {}
+        chunking_config = chunking_config or {}
+        metadata = metadata or {}
         
         # Create a dictionary with base log context fields
         base_extra = {"kb_id": self.kb_id, "doc_id": doc_id}
@@ -751,7 +788,7 @@ class KnowledgeBase:
         """
         return self.chunk_db.get_is_visual(doc_id, chunk_index)
     
-    def _get_chunk_content(self, doc_id: str, chunk_index: int) -> tuple[str, str]:
+    def _get_chunk_content(self, doc_id: str, chunk_index: int) -> Optional[str]:
         """Get the full content of a specific chunk.
 
         Internal method to retrieve chunk content.
@@ -796,13 +833,18 @@ class KnowledgeBase:
         search_results = self.reranker.rerank_search_results(query, search_results)
         return search_results
 
-    def _get_all_ranked_results(self, search_queries: list[str], metadata_filter: Optional[MetadataFilter] = None):
+    def _get_all_ranked_results(
+        self,
+        search_queries: list[str],
+        metadata_filter: Optional[MetadataFilter] = None,
+        top_k_per_query: int = 200,
+    ):
         """Execute multiple search queries.
 
         Internal method for parallel query execution.
         """
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(self._search, query, 200, metadata_filter) for query in search_queries]
+            futures = [executor.submit(self._search, query, top_k_per_query, metadata_filter) for query in search_queries]
             all_ranked_results = []
             for future in futures:
                 ranked_results = future.result()
@@ -862,6 +904,7 @@ class KnowledgeBase:
         latency_profiling: bool = False,
         metadata_filter: Optional[MetadataFilter] = None,
         return_mode: str = "text",
+        vector_search_top_k: int = 200,
     ) -> list[dict]:
         """Query the knowledge base to retrieve relevant segments.
 
@@ -904,6 +947,8 @@ class KnowledgeBase:
                 - "page_images": Return list of page image paths
                 - "dynamic": Choose format based on content type
                 Defaults to "text".
+            vector_search_top_k (int, optional): Number of vector results to retrieve per query
+                before reranking/RSE. Defaults to 200.
 
         Returns:
             list[dict]: List of segment information dictionaries, ordered by relevance.
@@ -999,7 +1044,11 @@ class KnowledgeBase:
 
             # --- Search/Rerank Step ---
             step_start_time = time.perf_counter()
-            all_ranked_results = self._get_all_ranked_results(search_queries=search_queries, metadata_filter=metadata_filter)
+            all_ranked_results = self._get_all_ranked_results(
+                search_queries=search_queries,
+                metadata_filter=metadata_filter,
+                top_k_per_query=vector_search_top_k,
+            )
             step_duration = time.perf_counter() - step_start_time
             
             # Get the number of initial results per query

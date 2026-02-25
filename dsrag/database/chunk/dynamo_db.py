@@ -5,6 +5,7 @@ import time
 from dsrag.utils.imports import boto3
 from dsrag.database.chunk.db import ChunkDB
 from dsrag.database.chunk.types import FormattedDocument
+from dsrag.database.chunk.metadata_utils import deserialize_metadata
 
 
 def get_key():
@@ -140,7 +141,7 @@ class DynamoDB(ChunkDB):
             print(e)
 
 
-    def add_document(self, doc_id: str, chunks: dict[int, dict[str, Any]], supp_id: str = "", metadata: dict = {}) -> None:
+    def add_document(self, doc_id: str, chunks: dict[int, dict[str, Any]], supp_id: str = "", metadata: Optional[dict] = None) -> None:
         # Initialize DynamoDB resource
         dynamo_db = self.create_dynamo_client()
         table = dynamo_db.Table(self.table_name)
@@ -295,8 +296,8 @@ class DynamoDB(ChunkDB):
                     metadata = item.get('metadata')
 
                     # If metadata is stored as a string, convert it back to a dictionary
-                    if metadata and isinstance(metadata, str):
-                        metadata = eval(metadata)  # Be cautious with eval; consider safer alternatives
+                    if metadata:
+                        metadata = deserialize_metadata(metadata)
 
                 # Collect chunks if include_content is True
                 if include_content:

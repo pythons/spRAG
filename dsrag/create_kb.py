@@ -35,8 +35,8 @@ def create_kb_from_directory(kb_id: str, directory: str, title: str = None, desc
 
                     kb.add_document(doc_id=clean_file_path, text=text)
                     time.sleep(1) # pause for 1 second to avoid hitting API rate limits
-                except:
-                    print (f"Error reading {file_name}")
+                except Exception as e:
+                    print(f"Error reading {file_name}: {e}")
                     continue
             else:
                 print (f"Unsupported file type: {file_name}")

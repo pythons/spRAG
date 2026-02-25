@@ -56,7 +56,7 @@ pip install dsrag[milvus]
 pip install dsrag[pinecone]
 
 # Install with all vector database support
-pip install dsrag[all-vector-dbs]
+pip install dsrag[all-dbs]
 
 # Install all optional dependencies
 pip install dsrag[all]

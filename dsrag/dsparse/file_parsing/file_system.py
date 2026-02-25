@@ -233,15 +233,21 @@ class S3FileSystem(FileSystem):
     """
     Uses S3 and DynamoDB to store and retrieve page image files and other data.
     """
-    def __init__(self, base_path: str, bucket_name: str, region_name: str, access_key: str, secret_key: str, error_table: str = None, dynamodb_table_name: str = None, dynamodb_client_data_table_name: str = None):
+    def __init__(self, base_path: str, bucket_name: str, region_name: str, access_key: Optional[str] = None, secret_key: Optional[str] = None, error_table: str = None, dynamodb_table_name: str = None, dynamodb_client_data_table_name: str = None):
         super().__init__(base_path)
         self.bucket_name = bucket_name
         self.region_name = region_name
-        self.access_key = access_key
-        self.secret_key = secret_key
+        self.access_key = access_key or os.environ.get("AWS_S3_ACCESS_KEY")
+        self.secret_key = secret_key or os.environ.get("AWS_S3_SECRET_KEY")
         self.error_table = error_table
         self.dynamodb_table_name = dynamodb_table_name
         self.dynamodb_client_data_table_name = dynamodb_client_data_table_name
+
+        if not self.access_key or not self.secret_key:
+            raise ValueError(
+                "S3FileSystem requires access_key and secret_key. "
+                "Provide them directly or set AWS_S3_ACCESS_KEY/AWS_S3_SECRET_KEY."
+            )
 
     def create_s3_client(self):
         return boto3.client(
@@ -515,8 +521,6 @@ class S3FileSystem(FileSystem):
         base_dict.update({
             "bucket_name": self.bucket_name,
             "region_name": self.region_name,
-            "access_key": self.access_key,
-            "secret_key": self.secret_key,
             "error_table": self.error_table
         })
         return base_dict

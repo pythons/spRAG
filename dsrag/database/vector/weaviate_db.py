@@ -1,4 +1,5 @@
-from typing import Sequence, cast
+import os
+from typing import Optional, Sequence, cast
 from dsrag.database.vector.types import ChunkMetadata, Vector, VectorSearchResult
 from dsrag.database.vector.db import VectorDB
 import numpy as np
@@ -25,7 +26,7 @@ class WeaviateVectorDB(VectorDB):
         grpc_host="localhost",
         grpc_port="50052",
         grpc_secure=False,
-        weaviate_secret="secr3tk3y",
+        weaviate_secret: Optional[str] = None,
         init_timeout: int = 2,
         query_timeout: int = 45,
         insert_timeout: int = 120,
@@ -53,7 +54,7 @@ class WeaviateVectorDB(VectorDB):
         self.grpc_host = grpc_host
         self.grpc_port = grpc_port
         self.grpc_secure = grpc_secure
-        self.weaviate_secret = weaviate_secret
+        self.weaviate_secret = weaviate_secret or os.environ.get("WEAVIATE_API_KEY")
         self.init_timeout = init_timeout
         self.query_timeout = query_timeout
         self.insert_timeout = insert_timeout
@@ -70,11 +71,13 @@ class WeaviateVectorDB(VectorDB):
             )
         else:
             connection_params = weaviate.connect.ConnectionParams.from_url(
-                url=f"{'https' if http_secure else 'http'}://{http_host}:{http_port}"
+                url=f"{'https' if http_secure else 'http'}://{http_host}:{http_port}",
+                grpc_port=int(grpc_port),
+                grpc_secure=grpc_secure,
             )
             self.client = weaviate.WeaviateClient(
                 connection_params=connection_params,
-                auth_client_secret=weaviate.auth.AuthApiKey(weaviate_secret)
+                auth_client_secret=weaviate.auth.AuthApiKey(self.weaviate_secret) if self.weaviate_secret else None,
             )
             
         # Explicitly connect to the client
@@ -202,7 +205,6 @@ class WeaviateVectorDB(VectorDB):
             "grpc_host": self.grpc_host,
             "grpc_port": self.grpc_port,
             "grpc_secure": self.grpc_secure,
-            "weaviate_secret": self.weaviate_secret,
             "init_timeout": self.init_timeout,
             "query_timeout": self.query_timeout,
             "insert_timeout": self.insert_timeout,

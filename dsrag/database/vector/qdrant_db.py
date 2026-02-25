@@ -1,5 +1,6 @@
 from typing import Sequence, cast
 import uuid
+import os
 from dsrag.database.vector.types import ChunkMetadata, Vector, VectorSearchResult
 from dsrag.database.vector.db import VectorDB
 import numpy as np
@@ -76,7 +77,7 @@ class QdrantVectorDB(VectorDB):
             "grpc_port": grpc_port,
             "prefer_grpc": prefer_grpc,
             "https": https,
-            "api_key": api_key,
+            "api_key": api_key or os.environ.get("QDRANT_API_KEY"),
             "prefix": prefix,
             "timeout": timeout,
             "host": host,
@@ -204,8 +205,9 @@ class QdrantVectorDB(VectorDB):
         self.client.delete_collection(self.kb_id)
 
     def to_dict(self):
+        serialized_options = {k: v for k, v in self.client_options.items() if k != "api_key"}
         return {
             **super().to_dict(),
             "kb_id": self.kb_id,
-            **self.client_options,
+            **serialized_options,
         }
