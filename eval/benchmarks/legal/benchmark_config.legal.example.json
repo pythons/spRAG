@@ -1,0 +1,26 @@
+{
+  "name": "legal-benchmark-sprint",
+  "domain": "legal",
+  "dataset_version": "legal-v1",
+  "run_id": "current",
+  "baseline": "top_k",
+  "lower_is_better": ["latency_ms", "cost_usd"],
+  "runs": [
+    {
+      "name": "top_k",
+      "metrics": {
+        "accuracy": 0.39,
+        "latency_ms": 940,
+        "cost_usd": 0.012
+      }
+    },
+    {
+      "name": "cch_rse_legal_profile",
+      "metrics": {
+        "accuracy": 0.77,
+        "latency_ms": 1080,
+        "cost_usd": 0.018
+      }
+    }
+  ]
+}

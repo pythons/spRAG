@@ -7,15 +7,30 @@ Use `benchmark_runner.py` to generate a Markdown comparison report from a JSON c
 
 ### Run
 ```bash
-python eval/benchmark_runner.py --config eval/benchmark_config.example.json --output /tmp/benchmark_report.md
+python eval/benchmark_runner.py \
+  --config eval/benchmark_config.example.json \
+  --compare-with eval/benchmark_config.previous.example.json \
+  --threshold-config eval/thresholds.example.json \
+  --output /tmp/benchmark_report.md \
+  --output-json /tmp/benchmark_summary.json
 ```
 
 If `--output` is omitted, the report is printed to stdout.
+
+### Key options
+- `--baseline-run`: override baseline run name from config
+- `--compare-with`: previous config file to generate version-compare section
+- `--threshold-config`: regression threshold rules for CI gate checks
+- `--output-json`: write machine-readable summary for CI and release tooling
+- `--enforce-thresholds`: exit non-zero if threshold checks fail
 
 ### Config Shape
 ```json
 {
   "name": "finance-legal-h1-sprint-3",
+  "domain": "general",
+  "dataset_version": "v1",
+  "run_id": "current",
   "baseline": "top_k",
   "lower_is_better": ["latency_ms", "cost_usd"],
   "runs": [
@@ -30,4 +45,10 @@ The report includes:
 - baseline selection
 - metric table
 - deltas vs baseline per run
+- optional version-compare section
 - simple winner summary by aggregate normalized score
+- optional JSON gate summary (`passed`, `violations`)
+
+## Domain presets
+- Finance template: `eval/benchmarks/finance/benchmark_config.finance.example.json`
+- Legal template: `eval/benchmarks/legal/benchmark_config.legal.example.json`

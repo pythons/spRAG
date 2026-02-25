@@ -48,9 +48,11 @@ nav:
     - Chat: api/chat.md
   - Strategy:
     - 2026 H1 Roadmap: strategy/roadmap-2026-h1.md
+    - Benchmark Policy: strategy/benchmark-policy.md
   - Operations:
     - Release Playbook: operations/release-playbook.md
     - Release Notes Template: operations/release-notes-template.md
+    - Release Notes Index: operations/release-notes/README.md
     - Known Issues Matrix: operations/known-issues-matrix.md
   - Community:
     - Contributing: community/contributing.md

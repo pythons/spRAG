@@ -1,0 +1,26 @@
+{
+  "name": "finance-benchmark-sprint",
+  "domain": "finance",
+  "dataset_version": "finance-v1",
+  "run_id": "current",
+  "baseline": "top_k",
+  "lower_is_better": ["latency_ms", "cost_usd"],
+  "runs": [
+    {
+      "name": "top_k",
+      "metrics": {
+        "accuracy": 0.44,
+        "latency_ms": 980,
+        "cost_usd": 0.013
+      }
+    },
+    {
+      "name": "cch_rse_finance_profile",
+      "metrics": {
+        "accuracy": 0.82,
+        "latency_ms": 1130,
+        "cost_usd": 0.019
+      }
+    }
+  ]
+}

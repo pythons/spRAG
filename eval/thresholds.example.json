@@ -1,0 +1,19 @@
+{
+  "thresholds": [
+    {
+      "metric": "accuracy",
+      "direction": "higher_is_better",
+      "max_regression_pct": 2.0
+    },
+    {
+      "metric": "latency_ms",
+      "direction": "lower_is_better",
+      "max_regression_pct": 15.0
+    },
+    {
+      "metric": "cost_usd",
+      "direction": "lower_is_better",
+      "max_regression_pct": 20.0
+    }
+  ]
+}

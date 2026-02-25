@@ -7,6 +7,8 @@ on:
 jobs:
   benchmark-report:
     runs-on: ubuntu-latest
+    env:
+      BENCHMARK_GATE_MODE: warn
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -16,9 +18,37 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Generate benchmark report
+      - name: Generate benchmark report and summary
         run: |
-          python eval/benchmark_runner.py --config eval/benchmark_config.example.json --output benchmark_report.md
+          python eval/benchmark_runner.py \
+            --config eval/benchmark_config.example.json \
+            --compare-with eval/benchmark_config.previous.example.json \
+            --threshold-config eval/thresholds.example.json \
+            --output benchmark_report.md \
+            --output-json benchmark_summary.json
+
+      - name: Evaluate benchmark thresholds (warning mode)
+        if: env.BENCHMARK_GATE_MODE == 'warn'
+        continue-on-error: true
+        run: |
+          python eval/benchmark_runner.py \
+            --config eval/benchmark_config.example.json \
+            --compare-with eval/benchmark_config.previous.example.json \
+            --threshold-config eval/thresholds.example.json \
+            --output benchmark_report.md \
+            --output-json benchmark_summary.json \
+            --enforce-thresholds
+
+      - name: Evaluate benchmark thresholds (hard gate)
+        if: env.BENCHMARK_GATE_MODE == 'enforce'
+        run: |
+          python eval/benchmark_runner.py \
+            --config eval/benchmark_config.example.json \
+            --compare-with eval/benchmark_config.previous.example.json \
+            --threshold-config eval/thresholds.example.json \
+            --output benchmark_report.md \
+            --output-json benchmark_summary.json \
+            --enforce-thresholds
 
       - name: Validate known issues docs sync
         run: |
@@ -29,7 +59,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-report
-          path: benchmark_report.md
+          path: |
+            benchmark_report.md
+            benchmark_summary.json
 
   run-tests:
     needs: benchmark-report
