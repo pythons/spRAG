@@ -39,6 +39,7 @@ nav:
     - Knowledge Bases: concepts/knowledge-bases.md
     - Components: concepts/components.md
     - Profiles: concepts/profiles.md
+    - Vertical Templates: concepts/templates.md
     - Configuration: concepts/config.md
     - Diagnostics: concepts/diagnostics.md
     - Chat: concepts/chat.md
@@ -56,6 +57,7 @@ nav:
     - Release Notes Template: operations/release-notes-template.md
     - Release Notes Index: operations/release-notes/README.md
     - Known Issues Matrix: operations/known-issues-matrix.md
+    - Troubleshooting: operations/troubleshooting.md
   - Community:
     - Contributing: community/contributing.md
     - Support: community/support.md
