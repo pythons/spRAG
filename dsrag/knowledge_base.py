@@ -36,40 +36,15 @@ from dsrag.config.profiles import (
     get_profile_preset,
     merge_with_profile_defaults,
 )
+from dsrag.config.schema import (
+    build_stable_kb_config_schema,
+    redact_sensitive_config,
+    validate_stable_kb_config_schema,
+)
 from dsrag.telemetry import (
     NullTelemetrySink,
     emit_telemetry_event,
 )
-
-
-SENSITIVE_CONFIG_KEYS = {
-    "password",
-    "secret_key",
-    "access_key",
-    "access_secret",
-    "api_key",
-    "token",
-    "auth_token",
-    "weaviate_secret",
-}
-
-
-def _redact_sensitive_values(value):
-    if isinstance(value, dict):
-        redacted = {}
-        for key, nested_value in value.items():
-            normalized_key = key.lower()
-            if (
-                normalized_key in SENSITIVE_CONFIG_KEYS
-                or normalized_key.endswith("_password")
-                or normalized_key.endswith("_secret")
-            ):
-                continue
-            redacted[key] = _redact_sensitive_values(nested_value)
-        return redacted
-    if isinstance(value, list):
-        return [_redact_sensitive_values(v) for v in value]
-    return value
 
 
 class KnowledgeBase:
@@ -227,11 +202,41 @@ class KnowledgeBase:
             # Persist VLM client if present
             "vlm_client": (self.vlm_client.to_dict() if getattr(self, "vlm_client", None) else None),
         }
-        components = _redact_sensitive_values(components)
+        components = redact_sensitive_config(components)
         # Combine metadata and components
         full_data = {**self.kb_metadata, "components": components}
 
         self.metadata_storage.save(full_data, self.kb_id)
+
+    def export_config_schema(self, include_sensitive: bool = False) -> Dict:
+        """Export a stable, versioned config schema snapshot.
+
+        Args:
+            include_sensitive (bool, optional): Include sensitive fields if True.
+                Defaults to False.
+
+        Returns:
+            Dict: Stable config schema snapshot.
+        """
+        components = {
+            "embedding_model": self.embedding_model.to_dict(),
+            "reranker": self.reranker.to_dict(),
+            "auto_context_model": self.auto_context_model.to_dict(),
+            "vector_db": self.vector_db.to_dict(),
+            "chunk_db": self.chunk_db.to_dict(),
+            "file_system": self.file_system.to_dict(),
+            "vlm_client": (
+                self.vlm_client.to_dict() if getattr(self, "vlm_client", None) else None
+            ),
+        }
+        schema = build_stable_kb_config_schema(
+            kb_id=self.kb_id,
+            kb_metadata=self.kb_metadata,
+            components=components,
+            include_sensitive=include_sensitive,
+        )
+        validate_stable_kb_config_schema(schema)
+        return schema
 
     def _load(self, auto_context_model=None, reranker=None, file_system=None, chunk_db=None, vector_db=None, vlm_client: Optional[VLM] = None):
         """Load a knowledge base configuration from disk.

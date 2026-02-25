@@ -12,6 +12,7 @@ The following methods are part of the public API:
 - `delete`: Delete the entire knowledge base and all associated data
 - `delete_document`: Delete a specific document from the knowledge base
 - `query`: Search the knowledge base with one or more queries
+- `export_config_schema`: Export stable KB config schema snapshot
 
 ::: dsrag.knowledge_base.KnowledgeBase
     options:
@@ -24,6 +25,7 @@ The following methods are part of the public API:
         - delete
         - delete_document
         - query
+        - export_config_schema
 
 ## KB Components
 

@@ -41,6 +41,7 @@ nav:
     - Profiles: concepts/profiles.md
     - Vertical Templates: concepts/templates.md
     - Configuration: concepts/config.md
+    - Config Schema: concepts/config-schema.md
     - Diagnostics: concepts/diagnostics.md
     - Telemetry: concepts/telemetry.md
     - Chat: concepts/chat.md

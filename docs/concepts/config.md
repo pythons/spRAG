@@ -19,6 +19,8 @@ Supported profiles:
 
 Profile defaults are applied first, then any configs you pass to `add_document` or `query` override those defaults.
 
+For a stable, versioned configuration snapshot (with sensitive values redacted by default), see the Config Schema page and `kb.export_config_schema()`.
+
 The following configuration dictionaries can be passed to the `add_document` method:
 
 ### AutoContext Config

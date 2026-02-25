@@ -1,5 +1,11 @@
 import logging
 from dsrag.config.profiles import PROFILE_PRESETS, DEFAULT_PROFILE
+from dsrag.config.schema import (
+    CONFIG_SCHEMA_VERSION,
+    build_stable_kb_config_schema,
+    redact_sensitive_config,
+    validate_stable_kb_config_schema,
+)
 from dsrag.diagnostics import run_diagnostics
 from dsrag.templates import (
     VERTICAL_TEMPLATES,
@@ -28,6 +34,10 @@ logger.addHandler(logging.NullHandler())
 __all__ = [
     "PROFILE_PRESETS",
     "DEFAULT_PROFILE",
+    "CONFIG_SCHEMA_VERSION",
+    "build_stable_kb_config_schema",
+    "redact_sensitive_config",
+    "validate_stable_kb_config_schema",
     "run_diagnostics",
     "VERTICAL_TEMPLATES",
     "list_vertical_templates",
