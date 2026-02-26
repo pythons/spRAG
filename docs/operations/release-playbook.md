@@ -23,6 +23,7 @@ Define a repeatable bi-weekly release process that balances model quality gains,
 - Developer quality:
   - Quickstart still valid
   - Known issues matrix refreshed
+  - Release notes compatibility sections completed (SDK/config/telemetry)
 
 ## Release Artifacts
 - Changelog entries by category:

@@ -55,6 +55,10 @@ jobs:
           python docs/operations/generate_known_issues.py
           git diff --exit-code docs/operations/known-issues-matrix.md
 
+      - name: Validate release notes compatibility sections
+        run: |
+          python docs/operations/check_release_notes_gate.py
+
       - name: Upload benchmark report artifact
         uses: actions/upload-artifact@v4
         with:

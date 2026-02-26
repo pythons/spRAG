@@ -22,6 +22,20 @@
 - Required dependency/version updates.
 - Migration notes (if any).
 
+## SDK Contract Compatibility
+- SDK schema version:
+- Backward compatible with previous release: Yes/No
+- Request/response field changes:
+- Error code changes:
+- Migration required: Yes/No
+
+## Schema and Telemetry Compatibility
+- Config schema version:
+- Telemetry event schema version:
+- Backward compatible with previous release: Yes/No
+- Sensitive-value boundary changes:
+- Migration required: Yes/No
+
 ## Benchmark Delta
 - Baseline:
 - Candidate:
